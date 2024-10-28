@@ -1,36 +1,48 @@
-from flask import Flask, request, redirect
+from flask import Flask, redirect
+import os
 import requests
+import pandas as pd
 
 app = Flask(__name__)
 
-LINE_ACCESS_TOKEN = 'YOUR_LINE_ACCESS_TOKEN'
-LINE_API_URL = 'https://api.line.me/v2/bot/message/push'
+# LINEアクセストークン
+LINE_ACCESS_TOKEN = "YOUR_LINE_ACCESS_TOKEN"
+# レビューURL
+REVIEW_URL = "https://g.page/r/CWjQxOIQzuUzEBM/review"
+# ユーザーIDを含むCSVファイルのパス
+USER_ID_CSV_PATH = "user_ids.csv"
 
-@app.route('/')
-def home():
-    return 'Hello, Heroku!'
-
-@app.route('/send_coupon', methods=['POST'])
-def send_coupon():
-    user_id = request.form.get('user_id')
-    coupon_message = "Thank you for your review! Here is your coupon: XYZ123"
-
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {LINE_ACCESS_TOKEN}',
-    }
-    payload = {
+def send_coupon(user_id):
+    """指定したユーザーIDにクーポンメッセージを送信する関数"""
+    message = {
         "to": user_id,
         "messages": [
             {
                 "type": "text",
-                "text": coupon_message
+                "text": "クーポンが発行されました！お楽しみください！"
             }
         ]
     }
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+    }
+    response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=message)
+    return response.status_code == 200
 
-    response = requests.post(LINE_API_URL, headers=headers, json=payload)
-    return 'Coupon sent!' if response.status_code == 200 else 'Failed to send coupon'
+@app.route('/review', methods=['GET'])
+def review():
+    # ユーザーIDをCSVから取得
+    df = pd.read_csv(USER_ID_CSV_PATH)
+    user_ids = df.iloc[:, 0].tolist()  # 1列目のユーザーIDを取得
+
+    # クーポンを送信
+    for user_id in user_ids:
+        send_coupon(user_id)
+
+    # レビューリンクにリダイレクト
+    return redirect(REVIEW_URL)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
